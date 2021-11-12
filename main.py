@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import math
+import seaborn as sns
 
 df = pd.read_csv("data/kaggle_survey_2021_responses.csv", header=None, skiprows=2)
 columns = ["duration", "age", "gender", "country", "education", "role", "years_exp", "lan_python", "lan_r", "lan_sql",
@@ -116,6 +116,9 @@ columns = ["duration", "age", "gender", "country", "education", "role", "years_e
            "ml_experiments_learn_none", "ml_experiments_learn_other"
            ]
 df.columns = columns
+# create an id for each row
+id = range(len(df))
+df["id"] = id
 
 df.head()
 
@@ -127,39 +130,57 @@ df.head()
 df["age"].value_counts().plot(kind="bar")
 # we see that most are on the younger side. Let us now try to see the languages popular within each age group
 
-# create an id for each row
-id = range(len(df))
-df["id"] = id
-# save the columns I want to keep
-to_keep = ["id", "age", "lan_python", "lan_r", "lan_sql",
-           "lan_c", "lan_c++", "lan_java", "lan_javascript", "lan_julia", "lan_swift", "lan_bash",
-           "lan_matlab", "lan_none", "lan_other"]
-# save the names of the wide columns that should be transofmred to long
+# create languages data frame
+
 languages = ["lan_python", "lan_r", "lan_sql",
            "lan_c", "lan_c++", "lan_java", "lan_javascript", "lan_julia", "lan_swift", "lan_bash",
            "lan_matlab", "lan_none", "lan_other"]
-# save a copy of the data frame that includes only the columns i want to keep
-hold = df[to_keep]
-# if a user uses a particular language return true, otherwise false
-hold[languages] = hold[languages].applymap(lambda x: False if x is np.nan else True)
-hold.head()
-# now convert to long
-hold = pd.melt(hold, id_vars=["id", "age"], value_vars=languages, var_name="language", value_name="used")
-# remove rows where used is false
-hold = hold[hold["used"]==True]
-# remove the "lan_" part from the language name
-hold["language"] = hold["language"].str[4:]
-# we can now generate the stacked bar graph
-# first calculate the size of each group
-hold = hold.groupby(["age", "language"]).size().reset_index(name="counts")
-# now pivot the table so that we have a column for each language
-hold = hold.pivot_table(index="age", columns="language", values="counts")
-hold.plot(kind="bar", stacked=True)
-# it would be useful to look at the percentages within each age group
-hold["total"] = hold.sum(axis=1)
-for column in hold.columns:
-    hold[column] = hold[column] / hold["total"] * 100
-hold.drop("total", axis=1, inplace=True)
-hold.plot(kind="bar", stacked=True, color=plt.cm.Paired(np.arange(len(hold.columns))))
-plt.legend(ncol=4, loc="upper left")
+languages_df = df[languages]
+# remove the "lan_" in the names
+languages_new = [x[4:] for x in languages]
+languages_df.columns = languages_new
+languages_df= languages_df.applymap(lambda x: False if x is np.nan else True)
+languages_df["age"] = df["age"]
+languages_count_df = languages_df.groupby("age").sum()
+languages_count_df.plot(kind="bar", stacked="True")
+# make a stacked plot
+languages_count_df["total"] = languages_count_df.sum(axis=1)
+for column in languages_count_df.columns:
+    languages_count_df[column] = languages_count_df[column] / languages_count_df["total"] * 100
+languages_count_df.drop("total", axis=1, inplace=True)
+languages_count_df.plot(kind="bar", stacked=True, rot=0, color=plt.cm.Paired(np.arange(len(languages_count_df.columns))))
+ax = plt.subplot(111)
+box = ax.get_position()
+ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
+# Put a legend below current axis
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
+          fancybox=True, shadow=True, ncol=8)
+
+# create a new recommendations data frame to look at recommendations for each individual
+recommendations_df = languages_df.copy()
+# remove the age column
+recommendations_df.drop("age", axis=1, inplace=True)
+# add the recommend column from the original df
+recommendations_df["recommend"] = df["recommend"]
+# we now have the languages used by each individual and the recommendation of each individual
+# add id so that we can convert wide to long
+recommendations_df["id"] = df["id"]
+# now make data frame long so that we have a single column for the languages used
+recommendations_df = pd.melt(recommendations_df, id_vars=["id", "recommend"], var_name="languages", value_name="used").sort_values("id")
+# keep only the languages that are used
+recommendations_df = recommendations_df[recommendations_df["used"] == True]
+# now get the count of each group
+recommendations_df_count = recommendations_df.groupby(["languages", "recommend"]).size().reset_index(name="count")
+# now pivot the table to wid eformat again so that we have a matrix where the columns are the languages recommended
+# and the rows are the languages used
+recommendations_df_count = recommendations_df_count.pivot_table(index="languages", columns="recommend", values="count")
+recommendations_df_count.head()
+# we can now produce a heatmap
+sns.heatmap(recommendations_df_count, cmap='RdYlGn_r')
+# the rows represent the languages used by users while the columns represent the languages recommended.
+# we note that the vast majority recommend python, no matter what languages they actually use
+# actually, the presence of Python is making it difficult to make sense of the other information
+# let us remove the Python recommendation
+sns.heatmap(recommendations_df_count.loc[:, recommendations_df_count.columns != "Python"], cmap='RdYlGn_r')
+# we see that users of python, r, and sql recommend that users learn r and sql to a large extent.
 
