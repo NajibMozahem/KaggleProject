@@ -1,3 +1,4 @@
+import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -122,16 +123,28 @@ df["id"] = id
 
 df.head()
 
-#df["age"] = df["age"].astype("category")
-#df["age"].cat.reorder_categories(["18-21", "22-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54",
- #                                 "55-59", "60-69", "70+"])
+df["years_exp"].value_counts()
+df["years_exp"] = df["years_exp"].astype("category")
+df["years_exp"].cat.reorder_categories(["I have never written code", "< 1 years", "1-3 years", "3-5 years",
+                                        "5-10 years", "10-20 years", "20+ years"], inplace=True)
+df["compensation"].value_counts()
+df["compensation"] = df["compensation"].astype("category")
+df["compensation"].cat.reorder_categories(["$0-999", "1,000-1,999", "2,000-2,999", "3,000-3,999", "4,000-4,999",
+                                           "5,000-7,499", "7,500-9,999", "10,000-14,999", "15,000-19,999",
+                                           "20,000-24,999", "25,000-29,999", "30,000-39,999", "40,000-49,999",
+                                           "50,000-59,999", "60,000-69,999", "70,000-79,999", "80,000-89,999",
+                                           "90,000-99,999", "100,000-124,999", "125,000-149,999", "150,000-199,999",
+                                           "200,000-249,999", "250,000-299,999", "300,000-499,999",
+                                           "$500,000-999,999", ">$1,000,000"], inplace=True)
+df["age"] = df["age"].astype("category")
+df["age"].cat.reorder_categories(["18-21", "22-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54",
+                                  "55-59", "60-69", "70+"], inplace=True)
 
 # let us look at the distribution of ages first
 df["age"].value_counts().plot(kind="bar")
 # we see that most are on the younger side. Let us now try to see the languages popular within each age group
 
 # create languages data frame
-
 languages = ["lan_python", "lan_r", "lan_sql",
            "lan_c", "lan_c++", "lan_java", "lan_javascript", "lan_julia", "lan_swift", "lan_bash",
            "lan_matlab", "lan_none", "lan_other"]
@@ -155,7 +168,6 @@ ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9]
 # Put a legend below current axis
 ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
           fancybox=True, shadow=True, ncol=8)
-
 # create a new recommendations data frame to look at recommendations for each individual
 recommendations_df = languages_df.copy()
 # remove the age column
@@ -184,3 +196,129 @@ sns.heatmap(recommendations_df_count, cmap='RdYlGn_r')
 sns.heatmap(recommendations_df_count.loc[:, recommendations_df_count.columns != "Python"], cmap='RdYlGn_r')
 # we see that users of python, r, and sql recommend that users learn r and sql to a large extent.
 
+# Results so far indicate that Python is by far the most popular no matter what the age group. It is also
+# by far recommended the most by all users of programming languages. Let us see if this is country specific
+countries = np.unique(df["country"])
+len(countries)
+# there are 66 countries, which is a lot. Let us randomly pick ten countries from the list
+countries_random = random.sample(list(countries), 10)
+country_recommendation_df = df[["country", "recommend"]]
+country_recommendation_df = country_recommendation_df[country_recommendation_df["country"].isin(countries_random)]
+country_recommendation_count_df = country_recommendation_df.groupby(["country", "recommend"]).size().reset_index(name="count")
+country_recommendation_count_df = country_recommendation_count_df.pivot_table(index="country", columns="recommend", values="count")
+# replace missing values by zero
+country_recommendation_count_df = country_recommendation_count_df.replace(np.nan, 0)
+country_recommendation_count_df.plot(kind="bar", stacked=True)
+# we see the same patter in all countries
+
+# Let us compare the salaries of those who use different programming languages
+salary_df = languages_df.copy()
+salary_df.drop("age", axis=1, inplace=True)
+salary_df[["id", "compensation"]] = df[["id", "compensation"]]
+salary_df = pd.melt(salary_df, id_vars=["id", "compensation"], var_name="languages", value_name="used").sort_values("id")
+salary_df = salary_df[salary_df["used"] == True]
+salary_df.drop("used", axis=1, inplace=True)
+salary_df = salary_df[~salary_df["languages"].isin(["none", "other"])]
+salary_count_df = salary_df.groupby(["languages", "compensation"]).size().reset_index(name="count").sort_values(["languages", "compensation"])
+salary_count_df = salary_count_df.pivot_table(index="languages", columns="compensation", values="count").replace(np.nan, 0)
+salary_count_df["total"] = salary_count_df.sum(axis=1)
+for column in salary_count_df.columns:
+    salary_count_df[column] = salary_count_df[column] / salary_count_df["total"] * 100
+salary_count_df.drop("total", axis=1, inplace=True)
+sns.heatmap(salary_count_df, cmap="YlGnBu")
+# the heatmap does not show that Python programs earn more than those who use other languages.
+# perhaps experience is a better explanation
+experience_df = df[["id", "compensation", "years_exp"]]
+experience_counts_df = experience_df.groupby(["compensation", "years_exp"]).size().reset_index(name="count")
+experience_counts_df = experience_counts_df.pivot_table(index="compensation", columns="years_exp", values="count")
+experience_counts_df["total"] = experience_counts_df.sum(axis=1)
+for column in experience_counts_df.columns:
+    experience_counts_df[column] = experience_counts_df[column] / experience_counts_df["total"] * 100
+experience_counts_df.drop("total", axis=1, inplace=True)
+experience_counts_df.plot(kind="bar", stacked=True)
+ax = plt.subplot(111)
+box = ax.get_position()
+ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
+# Put a legend below current axis
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+# we see that salary is mostly related to experience and not the type of programming language used
+
+# is learning more than a single language beneficial?
+more_languages_df = languages_df.copy()
+more_languages_df.drop("age", axis=1, inplace=True)
+more_languages_df["total_lan"] = more_languages_df.sum(axis=1)
+more_languages_df["compensation"] = df["compensation"]
+more_languages_mean_df = more_languages_df[["total_lan", "compensation"]].groupby("compensation").mean().reset_index()
+more_languages_mean_df.plot(x="compensation", y="total_lan", marker='o', rot=90)
+# it does seem that those who earn the highest tend to use more than one language. Therefore, learning
+# more than one language seems like a good idea. Perhaps learning more languages comes with experience,
+# just like a higher salary
+more_languages2_df = languages_df.copy()
+more_languages2_df.drop("age", axis=1, inplace=True)
+more_languages2_df["total_lan"] = more_languages2_df.sum(axis=1)
+more_languages2_df["years_exp"] = df["years_exp"]
+more_languages2_mean_df = more_languages2_df[["total_lan", "years_exp"]].groupby("years_exp").mean().reset_index()
+more_languages2_mean_df = more_languages2_mean_df[more_languages2_mean_df["years_exp"] != "I have never written code"]
+more_languages2_mean_df.plot(x="years_exp", y="total_lan", marker='o', rot=45)
+
+# does the salary differ by industry?
+industry_df = df[["industry", "compensation"]]
+industry_count_df = industry_df.groupby(["industry", "compensation"]).size().reset_index(name="count")
+industry_count_df = industry_count_df.pivot_table(index="industry", columns="compensation", values="count")
+industry_count_df["total"] = industry_count_df.sum(axis=1)
+for column in industry_count_df.columns:
+    industry_count_df[column] = industry_count_df[column] / industry_count_df["total"] * 100
+industry_count_df.drop("total", axis=1, inplace=True)
+sns.heatmap(industry_count_df, cmap="YlGnBu")
+# do not go into education :)
+
+# courses
+courses = ["courses_coursera",
+           "courses_edx", "courses_kaggle_learning_courses", "courses_datacamp", "courses_fast",
+           "courses_udacity", "courses_udemy", "courses_linkedin_learning",
+           "courses_cloud_certification_programs", "courses_university", "courses_none", "courses_other"]
+courses_df = df[courses]
+courses_new = [x[8:] for x in courses]
+courses_df.columns = courses_new
+courses_df["id"] = df["id"]
+courses_df = courses_df.applymap(lambda x: False if x is np.nan else True)
+courses_df = pd.melt(courses_df, id_vars=["id"], var_name="courses", value_name="used").sort_values("id")
+courses_df = courses_df[courses_df["used"] == True]
+courses_count_df = courses_df.groupby("courses").size().reset_index(name="count").sort_values("count")
+courses_count_df.plot(x = "courses", kind="barh")
+# based on these results, it seems that its a good place to start on coursera and kaggle
+
+# the final question is to know whether a certain IDE is preferable for beginners. To answer this question,
+# we need to produce a graph that includes information about both the experience of the individual and
+# his/her preferred IDE
+
+ide = ["ide_jupyter", "ide_rstudio", "ide_visual_studio", "ide_vs_code", "ide_pycharm",
+           "ide_spyder", "ide_notepad++", "ide_sublime_text", "ide_vim_emacs", "ide_matlab",
+           "ide_jupyter_notebook", "ide_none", "ide_other"]
+ide_df = df[ide]
+ide_new = [x[4:] for x in ide]
+ide_df.columns = ide_new
+ide_df = ide_df.applymap(lambda x: False if x is np.nan else True)
+experience_df.drop("compensation", axis=1, inplace=True)
+ide_df = ide_df.join(experience_df)
+ide_df = pd.melt(ide_df, id_vars=["id", "years_exp"], var_name="courses", value_name="used").sort_values("id")
+ide_df = ide_df[ide_df["used"] == True]
+ide_df.drop("used", axis=1, inplace=True)
+ide_df.drop("id", axis=1, inplace=True)
+ide_count_df = ide_df.groupby(["years_exp", "courses"]).size().reset_index(name="count")
+ide_count_df = ide_count_df.pivot_table(index="years_exp", columns="courses", values="count")
+ide_count_df = ide_count_df.reset_index()
+ide_count_df = ide_count_df[ide_count_df["years_exp"] != "I have never written code"]
+ide_count_df.set_index("years_exp", inplace=True)
+ide_count_df["total"] = ide_count_df.sum(axis=1)
+for column in ide_count_df.columns:
+    ide_count_df[column] = ide_count_df[column] / ide_count_df["total"] * 100
+ide_count_df.drop("total", axis=1, inplace=True)
+ide_count_df.plot(kind="bar", stacked=True, cmap="tab20b")
+ax = plt.subplot(111)
+box = ax.get_position()
+ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
+# Put a legend below current axis
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+# we see that there isnt much variation based on experience. The most popular choices for all levels of
+# experience seem to be jupyter notebook and vs_code
