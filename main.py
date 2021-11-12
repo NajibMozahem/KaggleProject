@@ -136,6 +136,7 @@ df["compensation"].cat.reorder_categories(["$0-999", "1,000-1,999", "2,000-2,999
                                            "90,000-99,999", "100,000-124,999", "125,000-149,999", "150,000-199,999",
                                            "200,000-249,999", "250,000-299,999", "300,000-499,999",
                                            "$500,000-999,999", ">$1,000,000"], inplace=True)
+df["age"].value_counts()
 df["age"] = df["age"].astype("category")
 df["age"].cat.reorder_categories(["18-21", "22-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54",
                                   "55-59", "60-69", "70+"], inplace=True)
@@ -161,7 +162,7 @@ languages_count_df["total"] = languages_count_df.sum(axis=1)
 for column in languages_count_df.columns:
     languages_count_df[column] = languages_count_df[column] / languages_count_df["total"] * 100
 languages_count_df.drop("total", axis=1, inplace=True)
-languages_count_df.plot(kind="bar", stacked=True, rot=0, color=plt.cm.Paired(np.arange(len(languages_count_df.columns))))
+languages_count_df.plot(kind="bar", stacked=True, rot=0, cmap="tab20b")
 ax = plt.subplot(111)
 box = ax.get_position()
 ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
@@ -208,7 +209,9 @@ country_recommendation_count_df = country_recommendation_df.groupby(["country", 
 country_recommendation_count_df = country_recommendation_count_df.pivot_table(index="country", columns="recommend", values="count")
 # replace missing values by zero
 country_recommendation_count_df = country_recommendation_count_df.replace(np.nan, 0)
-country_recommendation_count_df.plot(kind="bar", stacked=True)
+country_recommendation_count_df.plot(kind="bar", stacked=True, cmap="tab20b")
+# Put a legend below current axis
+ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 # we see the same patter in all countries
 
 # Let us compare the salaries of those who use different programming languages
